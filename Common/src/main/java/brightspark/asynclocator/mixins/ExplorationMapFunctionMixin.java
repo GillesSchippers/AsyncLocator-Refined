@@ -1,34 +1,47 @@
 package brightspark.asynclocator.mixins;
 
 import brightspark.asynclocator.ALConstants;
-import brightspark.asynclocator.logic.ExplorationMapFunctionLogic;
+import brightspark.asynclocator.AsyncLocator;
+import brightspark.asynclocator.logic.CommonLogic;
 import brightspark.asynclocator.platform.Services;
+import brightspark.asynclocator.logic.ExplorationMapFunctionLogic;
+import brightspark.asynclocator.ALDataComponents;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.MapItem;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.structure.Structure;
-import net.minecraft.world.level.saveddata.maps.MapDecoration;
+import net.minecraft.world.level.saveddata.maps.MapDecorationType;
+import net.minecraft.world.level.saveddata.maps.MapId;
+import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 import net.minecraft.world.level.storage.loot.LootContext;
 import net.minecraft.world.level.storage.loot.functions.ExplorationMapFunction;
-import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
+import net.minecraft.world.level.storage.loot.predicates.LootItemCondition;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-import org.spongepowered.asm.mixin.injection.callback.LocalCapture;
+import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+import java.util.List;
+import java.util.Optional;
 
 @Mixin(ExplorationMapFunction.class)
-public class ExplorationMapFunctionMixin {
-	@Shadow
-	@Final
-	TagKey<Structure> destination;
-
-	@Shadow
-	@Final
-	MapDecoration.Type mapDecoration;
+public abstract class ExplorationMapFunctionMixin {
+    @Shadow
+    @Final
+    TagKey<Structure> destination;
 
 	@Shadow
 	@Final
@@ -42,28 +55,96 @@ public class ExplorationMapFunctionMixin {
 	@Final
 	boolean skipKnownStructures;
 
-	@Inject(
-		method = "run",
+	@Unique
+	private ResourceKey<MapDecorationType> asyncLocator$decorationTypeKey;
+
+	@Inject(method = "<init>(Ljava/util/List;Lnet/minecraft/tags/TagKey;Lnet/minecraft/core/Holder;BIZ)V",
+			at = @At("RETURN"))
+	private void captureDecorationKey(List<LootItemCondition> conditions, TagKey<Structure> dest, Holder<MapDecorationType> typeHolder, byte zm, int radius, boolean skip, CallbackInfo ci) {
+		typeHolder.unwrapKey().ifPresentOrElse(
+			key -> this.asyncLocator$decorationTypeKey = key,
+			() -> {
+				ALConstants.logWarn("Failed to find registered key for MapDecorationType Holder {} in ExplorationMapFunction constructor", typeHolder);
+				this.asyncLocator$decorationTypeKey = null;
+			}
+		);
+	}
+
+	@Unique
+	private Optional<Holder<MapDecorationType>> getDecorationHolderFromKey(LootContext context) {
+		if (this.asyncLocator$decorationTypeKey == null) return Optional.empty();
+		return context.getLevel().registryAccess().registry(Registries.MAP_DECORATION_TYPE)
+				.flatMap(registry -> registry.getHolder(this.asyncLocator$decorationTypeKey));
+	}
+
+	@Redirect(
+		method = "run(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/storage/loot/LootContext;)Lnet/minecraft/world/item/ItemStack;",
 		at = @At(
 			value = "INVOKE",
-			target = "Lnet/minecraft/server/level/ServerLevel;findNearestMapStructure(Lnet/minecraft/tags/TagKey;Lnet/minecraft/core/BlockPos;IZ)Lnet/minecraft/core/BlockPos;"
-		),
-		locals = LocalCapture.CAPTURE_FAILSOFT,
-		cancellable = true
+			target = "Lnet/minecraft/world/item/MapItem;create(Lnet/minecraft/world/level/Level;IIBZZ)Lnet/minecraft/world/item/ItemStack;"
+		)
 	)
-	public void updateMapAsync(
-		ItemStack pStack,
-		LootContext pContext,
-		CallbackInfoReturnable<ItemStack> cir,
-		Vec3 vec3,
-		ServerLevel serverlevel
+	private ItemStack redirectMapItemCreate(
+		Level level, int x, int z, byte scale, boolean trackingPosition, boolean unlimitedTracking,
+		ItemStack originalStack_usedByRun, LootContext context_usedByRun
 	) {
-		if (!Services.CONFIG.explorationMapEnabled()) return;
+		LootContext context = context_usedByRun;
 
-		ALConstants.logDebug("Intercepted ExplorationMapFunction#run call");
-		ItemStack mapStack = ExplorationMapFunctionLogic.updateMapAsync(
-			serverlevel, BlockPos.containing(vec3), zoom, searchRadius, skipKnownStructures, mapDecoration, destination
+		if (!Services.CONFIG.explorationMapEnabled() || !(level instanceof ServerLevel serverLevel)) {
+			return MapItem.create(level, x, z, scale, trackingPosition, unlimitedTracking);
+		}
+
+		Optional<Holder<MapDecorationType>> mapDecorationHolderOpt = getDecorationHolderFromKey(context);
+		if (mapDecorationHolderOpt.isEmpty()) {
+			ALConstants.logError("ExplorationMap Redirect: Couldn't get MapDecorationType Holder for key {}, falling back to vanilla map creation.", this.asyncLocator$decorationTypeKey);
+			return MapItem.create(level, x, z, scale, trackingPosition, unlimitedTracking);
+		}
+
+		ALConstants.logDebug("Redirecting MapItem.create for async locator exploration map {}.", destination.location());
+
+		BlockPos originPos = context.getParamOrNull(LootContextParams.ORIGIN) != null
+							? BlockPos.containing(context.getParam(LootContextParams.ORIGIN))
+							: BlockPos.containing(x, level.getHeight() / 2, z);
+
+		MapItemSavedData mapData = MapItemSavedData.createFresh(
+			0,
+			0,
+			this.zoom,
+			false,
+			false,
+			serverLevel.dimension()
 		);
-		cir.setReturnValue(mapStack);
+
+		MapId newMapId = serverLevel.getFreeMapId();
+		serverLevel.setMapData(newMapId, mapData);
+		ALConstants.logDebug("Saved initial MapItemSavedData for new MapId {} for exploration map.", newMapId);
+
+        ItemStack pendingMapStack = CommonLogic.createManagedMap();
+		pendingMapStack.set(DataComponents.MAP_ID, newMapId);
+		ALConstants.logDebug("Assigned MapId {} to exploration map ItemStack.", newMapId);
+
+		AsyncLocator.locate(serverLevel, destination, originPos, searchRadius, skipKnownStructures)
+			.thenOnServerThread(foundPos -> {
+				Component mapName = ExplorationMapFunctionLogic.getCachedName(pendingMapStack);
+				BlockPos inventoryPos = context.getParamOrNull(LootContextParams.ORIGIN) != null
+											? BlockPos.containing(context.getParam(LootContextParams.ORIGIN))
+											: null;
+
+				if (foundPos != null) {
+					ALConstants.logInfo("Async location found for exploration map {}: {} -> Calling completion logic", destination.location(), foundPos);
+					CommonLogic.completeMapUpdate(pendingMapStack, serverLevel, foundPos, mapDecorationHolderOpt.get(), mapName);
+				} else {
+					ALConstants.logInfo("Async location not found for exploration map {} -> Invalidating map in inventory (if possible)", destination.location());
+                    if (inventoryPos != null) {
+                        Services.EXPLORATION_MAP_FUNCTION_LOGIC.invalidateMap(pendingMapStack, serverLevel, inventoryPos);
+                    } else {
+                         ALConstants.logWarn("Cannot invalidate exploration map - LootContext lacks ORIGIN parameter.");
+                         pendingMapStack.remove(ALDataComponents.LOCATING);
+                         pendingMapStack.remove(DataComponents.ITEM_NAME);
+                    }
+				}
+			});
+
+		return pendingMapStack;
 	}
 }

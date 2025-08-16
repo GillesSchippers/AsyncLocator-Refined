@@ -4,20 +4,25 @@ import brightspark.asynclocator.ALConstants;
 import brightspark.asynclocator.logic.CommonLogic;
 import brightspark.asynclocator.platform.services.ExplorationMapFunctionLogicHelper;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
-import net.minecraft.world.level.saveddata.maps.MapDecoration;
+import net.minecraft.world.level.saveddata.maps.MapDecorationType;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.function.BiConsumer;
 
 public class FabricExplorationMapFunctionLogicHelper implements ExplorationMapFunctionLogicHelper {
 	@Override
-	public void invalidateMap(ItemStack mapStack, ServerLevel level, BlockPos pos) {
-		handleUpdateMapInChest(mapStack, level, pos, (chest, slot) -> chest.setItem(slot, new ItemStack(Items.MAP)));
+	public void invalidateMap(ItemStack mapStack, ServerLevel level, BlockPos invPos) {
+		handleUpdateMapInChest(mapStack, level, invPos, (chest, slot) -> {
+			ALConstants.logDebug("Invalidating map in Fabric inventory slot {}", slot);
+			chest.setItem(slot, new ItemStack(Items.MAP));
+		});
 	}
 
 	@Override
@@ -26,35 +31,45 @@ public class FabricExplorationMapFunctionLogicHelper implements ExplorationMapFu
 		ServerLevel level,
 		BlockPos pos,
 		int scale,
-		MapDecoration.Type destinationType,
+		Holder<MapDecorationType> destinationTypeHolder,
 		BlockPos invPos,
-		Component displayName
+		@Nullable Component displayName
 	) {
-		CommonLogic.updateMap(mapStack, level, pos, scale, destinationType, displayName);
-		// Shouldn't need to set the stack in its slot again, as we're modifying the same instance
-		handleUpdateMapInChest(mapStack, level, invPos, (chest, slot) -> {});
+		CommonLogic.finalizeMap(mapStack, level, pos, scale, destinationTypeHolder, displayName);
+
+		handleUpdateMapInChest(mapStack, level, invPos, (chest, slot) -> {
+			ALConstants.logDebug("Updated map in Fabric inventory slot {}, broadcasting changes.", slot);
+			chest.setItem(slot, mapStack);
+		});
 	}
 
 	private static void handleUpdateMapInChest(
-		ItemStack mapStack,
+		ItemStack mapStackToFind,
 		ServerLevel level,
-		BlockPos invPos,
+		BlockPos inventoryPos,
 		BiConsumer<ChestBlockEntity, Integer> handleSlotFound
 	) {
-		BlockEntity be = level.getBlockEntity(invPos);
+		BlockEntity be = level.getBlockEntity(inventoryPos);
 		if (be instanceof ChestBlockEntity chest) {
-			for (int i = 0; i < chest.getContainerSize(); i++) {
-				ItemStack slotStack = chest.getItem(i);
-				if (slotStack == mapStack) {
+			boolean found = false;
+            java.util.UUID targetId = brightspark.asynclocator.logic.CommonLogic.getTrackingUUID(mapStackToFind);
+            for (int i = 0; i < chest.getContainerSize(); i++) {
+                ItemStack slotStack = chest.getItem(i);
+                java.util.UUID slotId = brightspark.asynclocator.logic.CommonLogic.getTrackingUUID(slotStack);
+                if (targetId != null && targetId.equals(slotId)) {
 					handleSlotFound.accept(chest, i);
 					CommonLogic.broadcastChestChanges(level, be);
-					return;
+					found = true;
+					break;
 				}
+			}
+			if (!found) {
+				ALConstants.logWarn("Could not find the specific map ItemStack instance in ChestBE at {}", inventoryPos);
 			}
 		} else {
 			ALConstants.logWarn(
-				"Couldn't find chest block entity on block {} at {}",
-				level.getBlockState(invPos), invPos
+				"No ChestBlockEntity at inventory position {} in level {}",
+				inventoryPos, level.dimension().location()
 			);
 		}
 	}

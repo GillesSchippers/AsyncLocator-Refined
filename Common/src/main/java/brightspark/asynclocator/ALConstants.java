@@ -2,6 +2,7 @@ package brightspark.asynclocator;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.Arrays;
 
 public class ALConstants {
 	private static final String LOG_PREFIX = "Async Locator -> ";
@@ -15,7 +16,9 @@ public class ALConstants {
 	}
 
 	public static void logError(Throwable throwable, String text, Object... args) {
-		LOG.error(String.format(LOG_PREFIX + text, args), throwable);
+		Object[] params = Arrays.copyOf(args, args.length + 1);
+		params[args.length] = throwable;
+		LOG.error(LOG_PREFIX + text, params);
 	}
 
 	public static void logWarn(String text, Object... args) {

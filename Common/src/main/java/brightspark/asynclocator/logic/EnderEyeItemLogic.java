@@ -2,7 +2,6 @@ package brightspark.asynclocator.logic;
 
 import brightspark.asynclocator.ALConstants;
 import brightspark.asynclocator.AsyncLocator;
-import brightspark.asynclocator.mixins.EyeOfEnderAccess;
 import net.minecraft.advancements.CriteriaTriggers;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -27,12 +26,13 @@ public class EnderEyeItemLogic {
 			if (pos != null) {
 				ALConstants.logInfo("Location found - updating eye of ender entity");
 				eyeOfEnder.signalTo(pos);
-				CriteriaTriggers.USED_ENDER_EYE.trigger((ServerPlayer) player, pos);
+				if (player instanceof ServerPlayer sp) {
+					CriteriaTriggers.USED_ENDER_EYE.trigger(sp, pos);
+				}
 				player.awardStat(Stats.ITEM_USED.get(enderEyeItem));
 			} else {
-				ALConstants.logInfo("No location found - killing eye of ender entity");
-				// Set the entity's life to long enough that it dies
-				((EyeOfEnderAccess) eyeOfEnder).setLife(Integer.MAX_VALUE - 100);
+				ALConstants.logInfo("No location found - removing eye of ender entity");
+				eyeOfEnder.discard();
 			}
 		});
 		((EyeOfEnderData) eyeOfEnder).setLocateTaskOngoing(true);

@@ -4,8 +4,17 @@ import brightspark.asynclocator.ALConstants;
 import brightspark.asynclocator.AsyncLocator;
 import brightspark.asynclocator.mixins.MerchantOfferAccess;
 import brightspark.asynclocator.platform.Services;
+import brightspark.asynclocator.ALDataComponents;
+import net.minecraft.util.Unit;
+import net.minecraft.world.level.saveddata.maps.MapId;
+import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
+import net.minecraft.world.level.Level;
+import net.minecraft.resources.ResourceKey;
+import com.mojang.datafixers.util.Pair;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
 import net.minecraft.core.HolderSet;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -13,32 +22,32 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.npc.AbstractVillager;
 import net.minecraft.world.entity.npc.Villager;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.trading.ItemCost;
 import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.level.levelgen.structure.Structure;
-import net.minecraft.world.level.saveddata.maps.MapDecoration;
+import net.minecraft.world.level.saveddata.maps.MapDecorationType;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Optional;
 
 public class MerchantLogic {
 	private MerchantLogic() {}
 
-	/**
-	 * @deprecated Use {@link CommonLogic#createEmptyMap()} instead
-	 */
-	@Deprecated(since = "1.1.0", forRemoval = true)
-	public static ItemStack createEmptyMap() {
-		return CommonLogic.createEmptyMap();
-	}
 
 	public static void invalidateMap(AbstractVillager merchant, ItemStack mapStack) {
-		mapStack.setHoverName(Component.translatable("item.minecraft.map"));
+		mapStack.set(DataComponents.ITEM_NAME, Component.translatable("item.minecraft.map"));
+		mapStack.remove(brightspark.asynclocator.ALDataComponents.LOCATING);
+
 		merchant.getOffers()
 			.stream()
 			.filter(offer -> offer.getResult() == mapStack)
 			.findFirst()
 			.ifPresentOrElse(
 				offer -> removeOffer(merchant, offer),
-				() -> ALConstants.logWarn("Failed to find merchant offer for map")
+				() -> ALConstants.logWarn("Failed to find merchant offer for map stack instance used in invalidateMap")
 			);
 	}
 
@@ -53,45 +62,31 @@ public class MerchantLogic {
 		}
 	}
 
-	/**
-	 * @deprecated Use {@link CommonLogic#updateMap(ItemStack, ServerLevel, BlockPos, int, MapDecoration.Type, String)} instead
-	 */
-	@Deprecated(since = "1.1.0", forRemoval = true)
-	public static void updateMap(
-		ItemStack mapStack,
-		ServerLevel level,
-		BlockPos pos,
-		String displayName,
-		MapDecoration.Type destinationType
-	) {
-		CommonLogic.updateMap(mapStack, level, pos, 2, destinationType, displayName);
-	}
-
 	public static void handleLocationFound(
 		ServerLevel level,
 		AbstractVillager merchant,
 		ItemStack mapStack,
-		String displayName,
-		MapDecoration.Type destinationType,
-		BlockPos pos
+		@Nullable String displayNameKey,
+		Holder<MapDecorationType> destinationTypeHolder,
+		@Nullable BlockPos pos
 	) {
 		if (pos == null) {
 			ALConstants.logInfo("No location found - invalidating merchant offer");
-
 			invalidateMap(merchant, mapStack);
 		} else {
-			ALConstants.logInfo("Location found - updating treasure map in merchant offer");
-
-			CommonLogic.updateMap(mapStack, level, pos, 2, destinationType, displayName);
+			ALConstants.logInfo("Location found at {} - updating treasure map in merchant offer", pos);
+			Component nameComponent = (displayNameKey == null || displayNameKey.isEmpty()) ? null : Component.translatable(displayNameKey);
+			CommonLogic.finalizeMap(mapStack, level, pos, 2, destinationTypeHolder, nameComponent);
 		}
 
 		if (merchant.getTradingPlayer() instanceof ServerPlayer tradingPlayer) {
 			ALConstants.logInfo("Player {} currently trading - updating merchant offers", tradingPlayer);
 
+			int villagerLevel = merchant instanceof Villager villager ? villager.getVillagerData().getLevel() : 1;
 			tradingPlayer.sendMerchantOffers(
 				tradingPlayer.containerMenu.containerId,
 				merchant.getOffers(),
-				merchant instanceof Villager villager ? villager.getVillagerData().getLevel() : 1,
+				villagerLevel,
 				merchant.getVillagerXp(),
 				merchant.showProgressBar(),
 				merchant.canRestock()
@@ -102,8 +97,8 @@ public class MerchantLogic {
 	public static MerchantOffer updateMapAsync(
 		Entity pTrader,
 		int emeraldCost,
-		String displayName,
-		MapDecoration.Type destinationType,
+		String displayNameKey,
+		Holder<MapDecorationType> destinationTypeHolder,
 		int maxUses,
 		int villagerXp,
 		TagKey<Structure> destination
@@ -118,8 +113,8 @@ public class MerchantLogic {
 					level,
 					merchant,
 					mapStack,
-					displayName,
-					destinationType,
+					displayNameKey,
+					destinationTypeHolder,
 					pos
 				))
 		);
@@ -128,8 +123,8 @@ public class MerchantLogic {
 	public static MerchantOffer updateMapAsync(
 		Entity pTrader,
 		int emeraldCost,
-		String displayName,
-		MapDecoration.Type destinationType,
+		String displayNameKey,
+		Holder<MapDecorationType> destinationTypeHolder,
 		int maxUses,
 		int villagerXp,
 		HolderSet<Structure> structureSet
@@ -140,27 +135,37 @@ public class MerchantLogic {
 			maxUses,
 			villagerXp,
 			(level, merchant, mapStack) -> AsyncLocator.locate(level, structureSet, merchant.blockPosition(), 100, true)
-				.thenOnServerThread(pair -> handleLocationFound(
+				.thenOnServerThread(pair -> {
+					BlockPos pos = pair != null ? pair.getFirst() : null;
+					handleLocationFound(
 					level,
 					merchant,
 					mapStack,
-					displayName,
-					destinationType,
-					pair.getFirst()
-				))
+						displayNameKey,
+						destinationTypeHolder,
+						pos
+					);
+				})
 		);
 	}
 
 	private static MerchantOffer updateMapAsyncInternal(
 		Entity trader, int emeraldCost, int maxUses, int villagerXp, MapUpdateTask task
 	) {
-		if (trader instanceof AbstractVillager merchant) {
-			ItemStack mapStack = CommonLogic.createEmptyMap();
-			task.apply((ServerLevel) trader.level(), merchant, mapStack);
+        if (trader instanceof AbstractVillager merchant && trader.level() instanceof ServerLevel serverLevel) {
+            // Use specialized method for merchant maps that creates proper MapId immediately
+            ItemStack mapStack = CommonLogic.createMerchantMap(serverLevel);
+            ALConstants.logDebug("Created merchant map with MapId {} for offer", mapStack.get(DataComponents.MAP_ID));
 
+            // Start async task with the properly initialized map
+            task.apply(serverLevel, merchant, mapStack);
+
+            // Create the offdr with the map that has a valid ID
+            ItemCost emeraldItemCost = new ItemCost(Items.EMERALD, emeraldCost);
+            Optional<ItemCost> compassCost = Optional.of(new ItemCost(Items.COMPASS));
 			return new MerchantOffer(
-				new ItemStack(Items.EMERALD, emeraldCost),
-				new ItemStack(Items.COMPASS),
+                emeraldItemCost,
+                compassCost,
 				mapStack,
 				maxUses,
 				villagerXp,
@@ -168,7 +173,7 @@ public class MerchantLogic {
 			);
 		} else {
 			ALConstants.logInfo(
-				"Merchant is not of type {} - not running async logic",
+                "Merchant is not of type {} or level is not ServerLevel - not running async logic",
 				AbstractVillager.class.getSimpleName()
 			);
 			return null;

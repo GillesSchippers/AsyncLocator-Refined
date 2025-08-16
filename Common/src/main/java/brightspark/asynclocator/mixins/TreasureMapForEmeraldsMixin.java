@@ -3,12 +3,21 @@ package brightspark.asynclocator.mixins;
 import brightspark.asynclocator.ALConstants;
 import brightspark.asynclocator.logic.MerchantLogic;
 import brightspark.asynclocator.platform.Services;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.HolderSet;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.npc.AbstractVillager;
+import net.minecraft.world.entity.npc.VillagerTrades;
 import net.minecraft.world.item.trading.MerchantOffer;
 import net.minecraft.world.level.levelgen.structure.Structure;
-import net.minecraft.world.level.saveddata.maps.MapDecoration;
+import net.minecraft.world.level.saveddata.maps.MapDecorationType;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -17,7 +26,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(targets = "net.minecraft.world.entity.npc.VillagerTrades$TreasureMapForEmeralds")
-public class TreasureMapForEmeraldsMixin {
+public abstract class TreasureMapForEmeraldsMixin {
 	@Shadow
 	@Final
 	private int emeraldCost;
@@ -25,10 +34,6 @@ public class TreasureMapForEmeraldsMixin {
 	@Shadow
 	@Final
 	private String displayName;
-
-	@Shadow
-	@Final
-	private MapDecoration.Type destinationType;
 
 	@Shadow
 	@Final
@@ -42,11 +47,10 @@ public class TreasureMapForEmeraldsMixin {
 	@Final
 	private TagKey<Structure> destination;
 
-	/*
-		Intercept TreasureMapForEmeralds#getOffer call right before it calls ServerLevel#findNearestMapFeature to pass
-		the logic over to an async task. Instead of returning the complete map or null, we'll have to always return an
-	 	incomplete filled map and later update it with the details when we have them.
-	 */
+	@Shadow
+	@Final
+	private Holder<MapDecorationType> destinationType;
+
 	@Inject(
 		method = "getOffer",
 		at = @At(
@@ -55,19 +59,33 @@ public class TreasureMapForEmeraldsMixin {
 		),
 		cancellable = true
 	)
-	public void updateMapAsync(
+	public void updateMapAsyncInject(
 		Entity pTrader,
 		RandomSource pRandom,
-		CallbackInfoReturnable<MerchantOffer> callbackInfo
+		CallbackInfoReturnable<MerchantOffer> cir
 	) {
 		if (!Services.CONFIG.villagerTradeEnabled()) return;
 
-		ALConstants.logDebug("Intercepted TreasureMapForEmeralds#getOffer call");
+		Holder<MapDecorationType> destinationTypeHolder = this.destinationType;
+
+		if (destinationTypeHolder == null) {
+			ALConstants.logError("Shadowed destinationType Holder is null, cannot create async offer.");
+			return;
+		}
+
+		ALConstants.logDebug("Intercepted TreasureMapForEmeralds#getOffer call via @Inject");
 		MerchantOffer offer = MerchantLogic.updateMapAsync(
-			pTrader, emeraldCost, displayName, destinationType, maxUses, villagerXp, destination
+			pTrader,
+			emeraldCost,
+			displayName,
+			destinationTypeHolder,
+			maxUses,
+			villagerXp,
+			destination
 		);
+
 		if (offer != null) {
-			callbackInfo.setReturnValue(offer);
+			cir.setReturnValue(offer);
 		}
 	}
 }

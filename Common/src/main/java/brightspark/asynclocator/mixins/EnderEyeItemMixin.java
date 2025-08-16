@@ -61,7 +61,7 @@ public class EnderEyeItemMixin {
 			value = "INVOKE",
 			target = "Lnet/minecraft/world/entity/projectile/EyeOfEnder;setItem(Lnet/minecraft/world/item/ItemStack;)V"
 		),
-		locals = LocalCapture.CAPTURE_FAILEXCEPTION
+		locals = LocalCapture.CAPTURE_FAILSOFT
 	)
 	public void startAsyncLocateTask(
 		Level pLevel,

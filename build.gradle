@@ -1,32 +1,39 @@
 plugins {
-    id 'fabric-loom' version '1.2-SNAPSHOT' apply(false)
-    id 'net.minecraftforge.gradle' version '[6.0,6.2)' apply(false)
+    id 'fabric-loom' version '1.11.5' apply(false)
+    id 'net.minecraftforge.gradle' version '6.0.43' apply(false)
     id 'org.spongepowered.gradle.vanilla' version '0.2.1-SNAPSHOT' apply(false)
-    id("org.spongepowered.mixin") version "0.7-SNAPSHOT" apply(false)
+    id("org.spongepowered.mixin") version "0.7.38" apply(false)
 }
 
 subprojects {
     apply plugin: 'java'
 
-    java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+    java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
     jar {
         from(rootProject.file("LICENSE")) {
             rename { "${it}_${mod_name}" }
         }
         manifest {
-            attributes([
-                    'Specification-Title'     : mod_name,
-                    'Specification-Vendor'    : mod_author,
-                    'Specification-Version'   : project.jar.archiveVersion,
-                    'Implementation-Title'    : project.name,
-                    'Implementation-Version'  : project.jar.archiveVersion,
-                    'Implementation-Vendor'   : mod_author,
-                    'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
-                    'Timestamp'               : System.currentTimeMillis(),
-                    'Built-On-Java'           : "${System.getProperty('java.vm.version')} (${System.getProperty('java.vm.vendor')})",
-                    'Built-On-Minecraft'      : minecraft_version
-            ])
+            def specTitleProvider = providers.provider { mod_name }
+            def specVendorProvider = providers.provider { mod_author }
+            def versionProvider = providers.provider { project.jar.archiveVersion.get() }
+            def implTitleProvider = providers.provider { project.name }
+            def timestampProvider = providers.provider { new Date().format("yyyy-MM-dd'T'HH:mm:ssZ") }
+            def javaVersionProvider = providers.provider { "${System.getProperty('java.vm.version')} (${System.getProperty('java.vm.vendor')})" }
+            def mcVersionProvider = providers.provider { minecraft_version }
+
+            attributes(
+                'Specification-Title': specTitleProvider,
+                'Specification-Vendor': specVendorProvider,
+                'Specification-Version': versionProvider,
+                'Implementation-Title': implTitleProvider,
+                'Implementation-Version': versionProvider,
+                'Implementation-Vendor': specVendorProvider,
+                'Implementation-Timestamp': timestampProvider,
+                'Built-On-Java': javaVersionProvider,
+                'Built-On-Minecraft': mcVersionProvider,
+            )
         }
     }
 
@@ -44,12 +51,13 @@ subprojects {
 
     tasks.withType(JavaCompile).configureEach {
         it.options.encoding = 'UTF-8'
-        it.options.release = 17
+        it.options.release = 21
     }
 
     processResources {
+        def propsProvider = providers.provider { project.properties }
         filesMatching(['pack.mcmeta', 'fabric.mod.json', 'mods.toml', '*.mixins.json']) {
-            expand project.properties
+            expand(propsProvider.get())
         }
     }
 

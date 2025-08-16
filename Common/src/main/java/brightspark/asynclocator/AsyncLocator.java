@@ -36,7 +36,9 @@ public class AsyncLocator {
 
 				@Override
 				public Thread newThread(@NotNull Runnable r) {
-					return new Thread(r, namePrefix + threadNum.getAndIncrement());
+					Thread t = new Thread(r, namePrefix + threadNum.getAndIncrement());
+					t.setDaemon(true);
+					return t;
 				}
 			}
 		);
@@ -46,6 +48,15 @@ public class AsyncLocator {
 		if (LOCATING_EXECUTOR_SERVICE != null) {
 			ALConstants.logInfo("Shutting down locating executor service");
 			LOCATING_EXECUTOR_SERVICE.shutdown();
+			try {
+				if (!LOCATING_EXECUTOR_SERVICE.awaitTermination(2, TimeUnit.SECONDS)) {
+					LOCATING_EXECUTOR_SERVICE.shutdownNow();
+				}
+			} catch (InterruptedException ie) {
+				LOCATING_EXECUTOR_SERVICE.shutdownNow();
+				Thread.currentThread().interrupt();
+			}
+			LOCATING_EXECUTOR_SERVICE = null;
 		}
 	}
 
