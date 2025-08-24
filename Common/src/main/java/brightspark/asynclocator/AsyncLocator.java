@@ -68,7 +68,7 @@ public class AsyncLocator {
 		}
 	}
 
-	private static boolean isExecutorActive() {
+	public static boolean isExecutorActive() {
 		ExecutorService es = LOCATING_EXECUTOR_SERVICE;
 		return es != null && !es.isShutdown() && !es.isTerminated();
 	}
@@ -139,7 +139,7 @@ public class AsyncLocator {
 		boolean skipExistingChunks
 	) {
 		try {
-			ALConstants.logInfo(
+			ALConstants.logDebug(
 				"Trying to locate {} in {} around {} within {} chunks",
 				structureTag, level, pos, searchRadius
 			);
@@ -169,7 +169,7 @@ public class AsyncLocator {
 		boolean skipExistingChunks
 	) {
 		try {
-			ALConstants.logInfo(
+			ALConstants.logDebug(
 				"Trying to locate {} in {} around {} within {} chunks",
 				structureSet, level, pos, searchRadius
 			);
