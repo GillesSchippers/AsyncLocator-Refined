@@ -3,9 +3,8 @@ package brightspark.asynclocator.mixins;
 import brightspark.asynclocator.ALConstants;
 import brightspark.asynclocator.AsyncLocator;
 import brightspark.asynclocator.logic.CommonLogic;
-import brightspark.asynclocator.platform.Services;
 import brightspark.asynclocator.logic.ExplorationMapFunctionLogic;
-import brightspark.asynclocator.ALDataComponents;
+import brightspark.asynclocator.platform.Services;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
@@ -127,12 +126,21 @@ public abstract class ExplorationMapFunctionMixin {
 			.thenOnServerThread(foundPos -> {
 				Component mapName = ExplorationMapFunctionLogic.getCachedName(pendingMapStack);
 				BlockPos inventoryPos = context.getParamOrNull(LootContextParams.ORIGIN) != null
-											? BlockPos.containing(context.getParam(LootContextParams.ORIGIN))
-											: null;
+						? BlockPos.containing(context.getParam(LootContextParams.ORIGIN))
+						: null;
 
 				if (foundPos != null) {
-					ALConstants.logInfo("Async location found for exploration map {}: {} -> Calling completion logic", destination.location(), foundPos);
-					CommonLogic.finalizeMap(pendingMapStack, serverLevel, foundPos, this.zoom, mapDecorationHolderOpt.get(), mapName);
+					ALConstants.logInfo("Async location found for exploration map {}: {}", destination.location(), foundPos);
+					if (inventoryPos != null) {
+						// Update the map in the inventory
+						Services.EXPLORATION_MAP_FUNCTION_LOGIC.updateMap(
+							pendingMapStack, serverLevel, foundPos, this.zoom,
+							mapDecorationHolderOpt.get(), inventoryPos, mapName
+						);
+					} else {
+						// if it can't find the inventory, finalize in place
+						CommonLogic.finalizeMap(pendingMapStack, serverLevel, foundPos, this.zoom, mapDecorationHolderOpt.get(), mapName);
+					}
 				} else {
 					ALConstants.logInfo("Async location not found for exploration map {} -> Invalidating map in inventory (if possible)", destination.location());
                     if (inventoryPos != null) {
