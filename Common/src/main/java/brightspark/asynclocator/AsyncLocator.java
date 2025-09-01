@@ -12,6 +12,7 @@ import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.structure.Structure;
 
 import java.text.NumberFormat;
+import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -50,20 +51,26 @@ public class AsyncLocator {
 	}
 
 	public static void shutdownExecutorService() {
+		ExecutorService executor;
 		synchronized (AsyncLocator.class) {
-			if (LOCATING_EXECUTOR_SERVICE != null) {
-				ALConstants.logInfo("Shutting down locating executor service");
-				LOCATING_EXECUTOR_SERVICE.shutdown();
-				try {
-					if (!LOCATING_EXECUTOR_SERVICE.awaitTermination(5, TimeUnit.SECONDS)) { // i think 5 seconds is better
-						LOCATING_EXECUTOR_SERVICE.shutdownNow();
-					}
-				} catch (InterruptedException ie) {
-					LOCATING_EXECUTOR_SERVICE.shutdownNow();
-					Thread.currentThread().interrupt();
-				}
-				LOCATING_EXECUTOR_SERVICE = null;
+			executor = LOCATING_EXECUTOR_SERVICE;
+			LOCATING_EXECUTOR_SERVICE = null;
+		}
+
+		if (executor == null) {
+			return;
+		}	
+
+		ALConstants.logInfo("Shutting down locating executor service");
+		executor.shutdown();
+		try {
+			if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+				List<Runnable> pending = executor.shutdownNow();
+				ALConstants.logWarn("Executor did not terminate cleanly, pending tasks: {}", pending.size());
 			}
+		} catch (InterruptedException ie) {
+			executor.shutdownNow();
+			Thread.currentThread().interrupt();
 		}
 	}
 
@@ -88,13 +95,18 @@ public class AsyncLocator {
 			structureTag, level, pos, searchRadius
 		);
 
-		if (!isExecutorActive()) {
+		ExecutorService executor;
+		synchronized (AsyncLocator.class) {
+			executor = LOCATING_EXECUTOR_SERVICE;
+			if (executor == null || executor.isShutdown()) {
 			ALConstants.logWarn("Locating executor service not initialized or not active: creating lazily");
 			setupExecutorService();
+				executor = LOCATING_EXECUTOR_SERVICE;
+			}
 		}
 
 		CompletableFuture<BlockPos> completableFuture = new CompletableFuture<>();
-		Future<?> future = LOCATING_EXECUTOR_SERVICE.submit(
+		Future<?> future = executor.submit(
 			() -> doLocateLevel(completableFuture, level, structureTag, pos, searchRadius, skipKnownStructures)
 		);
 		return new LocateTask<>(level.getServer(), completableFuture, future);
@@ -117,13 +129,18 @@ public class AsyncLocator {
 			structureSet, level, pos, searchRadius
 		);
 
-		if (!isExecutorActive()) {
-			ALConstants.logWarn("Locating executor service not initialized or not active: creating lazily");
-			setupExecutorService();
+		ExecutorService executor;
+		synchronized (AsyncLocator.class) {
+			executor = LOCATING_EXECUTOR_SERVICE;
+			if (executor == null || executor.isShutdown()) {
+				ALConstants.logWarn("Locating executor service not initialized or not active: creating lazily");
+				setupExecutorService();
+				executor = LOCATING_EXECUTOR_SERVICE;
+			}
 		}
 
 		CompletableFuture<Pair<BlockPos, Holder<Structure>>> completableFuture = new CompletableFuture<>();
-		Future<?> future = LOCATING_EXECUTOR_SERVICE.submit(
+		Future<?> future = executor.submit(
 			() -> doLocateChunkGenerator(completableFuture, level, structureSet, pos, searchRadius, skipKnownStructures)
 		);
 		return new LocateTask<>(level.getServer(), completableFuture, future);
