@@ -47,7 +47,6 @@ public class FabricExplorationMapFunctionLogicHelper implements ExplorationMapFu
 			ALConstants.logDebug("Updated map in Fabric container slot {}, broadcasting changes.", slot);
 			container.setItem(slot, actualStack);
 
-		CommonLogic.clearPendingState(actualStack);
 		});
 		if (!updated) {
 			ALConstants.logDebug("Fabric updateMap fallback: no container/slot match. Finalizing pending map in-place.");

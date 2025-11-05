@@ -65,15 +65,6 @@ public class NeoForgeExplorationMapFunctionLogicHelper
 		BlockPos invPos,
 		@Nullable Component displayName
 	) {
-		CommonLogic.finalizeMap(
-			mapStack,
-			level,
-			pos,
-			scale,
-			destinationTypeHolder,
-			displayName
-		);
-
 		boolean updated = handleUpdateMapInChest(mapStack, level, invPos, (handler, slot) -> {
 			ItemStack actualStack = handler.getStackInSlot(slot);
 
