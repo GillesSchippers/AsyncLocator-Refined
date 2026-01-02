@@ -1,0 +1,71 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "NeoForge - Client",
+      "presentation": {
+        "group": "Mod Development - NeoForge",
+        "order": 0
+      },
+      "projectName": "NeoForge",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@/home/yuan/Documents/Git/Minecraft/AsyncLocator-Refined/NeoForge/build/moddev/clientRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@/home/yuan/Documents/Git/Minecraft/AsyncLocator-Refined/NeoForge/build/moddev/clientRunVmArgs.txt",
+        "-Dfml.modFolders\u003dasynclocator%%/home/yuan/Documents/Git/Minecraft/AsyncLocator-Refined/NeoForge/bin/main"
+      ],
+      "cwd": "${workspaceFolder}/NeoForge/run/client",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    },
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "NeoForge - Data",
+      "presentation": {
+        "group": "Mod Development - NeoForge",
+        "order": 1
+      },
+      "projectName": "NeoForge",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@/home/yuan/Documents/Git/Minecraft/AsyncLocator-Refined/NeoForge/build/moddev/dataRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@/home/yuan/Documents/Git/Minecraft/AsyncLocator-Refined/NeoForge/build/moddev/dataRunVmArgs.txt",
+        "-Dfml.modFolders\u003dasynclocator%%/home/yuan/Documents/Git/Minecraft/AsyncLocator-Refined/NeoForge/bin/main"
+      ],
+      "cwd": "${workspaceFolder}/NeoForge/run/data",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    },
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "NeoForge - Server",
+      "presentation": {
+        "group": "Mod Development - NeoForge",
+        "order": 2
+      },
+      "projectName": "NeoForge",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@/home/yuan/Documents/Git/Minecraft/AsyncLocator-Refined/NeoForge/build/moddev/serverRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@/home/yuan/Documents/Git/Minecraft/AsyncLocator-Refined/NeoForge/build/moddev/serverRunVmArgs.txt",
+        "-Dfml.modFolders\u003dasynclocator%%/home/yuan/Documents/Git/Minecraft/AsyncLocator-Refined/NeoForge/bin/main"
+      ],
+      "cwd": "${workspaceFolder}/NeoForge/run/server",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    }
+  ]
+}
