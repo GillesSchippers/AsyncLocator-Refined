@@ -1,26 +1,19 @@
-# Build Instructions for Fabric MC 1.21.11 Port - CORRECTED
+# Build Instructions for Fabric MC 1.21.11
 
 ## Overview
-This document contains the **CORRECT** version information for building AsyncLocator-Refined for Minecraft 1.21.11.
+Build instructions for AsyncLocator-Refined for Minecraft 1.21.11 (Fabric only).
 
 ## Confirmed Version Numbers
 
 ### gradle.properties
 - `minecraft_version`: **1.21.11** ✓
-- `fabric_version`: **0.141.2+1.21.11** ✓ (Corrected)
-- `fabric_loader_version`: **0.18.4** ✓ (Corrected)
-- `neoforge_version`: **21.11.0** ✓
+- `fabric_version`: **0.141.2+1.21.11** ✓
+- `fabric_loader_version`: **0.18.4** ✓
 
-### Fabric/src/main/resources/fabric.mod.json
+### fabric.mod.json
 - `minecraft`: **1.21.11** ✓
-- `fabric-api`: **>=0.141.2+1.21.11** ✓ (Corrected)
-- `fabricloader`: **>=0.18.4** ✓ (Corrected)
-
-## What Was Corrected
-
-Initial estimates were updated with confirmed versions:
-- Fabric Loader: 0.17.3 → **0.18.4**
-- Fabric API: 0.137.0+1.21.11 → **0.141.2+1.21.11**
+- `fabric-api`: **>=0.141.2+1.21.11** ✓
+- `fabricloader`: **>=0.18.4** ✓
 
 ## Building the Project
 
@@ -31,28 +24,28 @@ Initial estimates were updated with confirmed versions:
 
 ### Build Steps
 
-1. Ensure you have network access to Fabric's Maven repository
-
-2. Clean any previous builds:
+1. Clean any previous builds:
    ```bash
    ./gradlew clean
    ```
 
-3. Build the Fabric module:
+2. Build the Fabric module:
    ```bash
    ./gradlew :Fabric:build
    ```
 
-4. The built JAR will be located at:
+3. The built JAR will be located at:
    ```
    Fabric/build/libs/async-locator-refined-fabric-1.21.11-1.5.0.jar
    ```
 
-### Building Both Fabric and NeoForge
+### Alternative: Build All
 
 ```bash
 ./gradlew build
 ```
+
+This builds both Common and Fabric modules.
 
 ### Troubleshooting
 
@@ -90,19 +83,19 @@ Since this is a minor patch version update (1.21.8 → 1.21.11):
 
 ## Notes
 
-- This is a server-side only mod - clients don't need to install it
+- This is a **server-side only mod** - clients don't need to install it
 - The mod works by making structure/biome location searches asynchronous
 - No client-side code or rendering is involved
 - Fabric API and Fabric Loader are the only dependencies
 
-## Version Information Confirmed
+## Version Information
 
-All version numbers have been verified and are correct for Minecraft 1.21.11:
+All version numbers confirmed for Minecraft 1.21.11:
 - ✓ Minecraft: 1.21.11
 - ✓ Fabric Loader: 0.18.4
 - ✓ Fabric API: 0.141.2+1.21.11
-- ✓ NeoForge: 21.11.0 (for multi-loader support)
 - ✓ Pack Format: 48
+- ✓ Java: 21+
 
 ## Additional Resources
 
