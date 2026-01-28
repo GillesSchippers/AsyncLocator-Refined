@@ -27,7 +27,7 @@ jobs:
         working-directory: asynclocator
         run: |
           chmod +x gradlew
-          ./gradlew build --no-daemon
+          ./gradlew :Fabric:build --no-daemon
 
       - name: capture build artifacts
         if: runner.os == 'Linux' && matrix.java == '21'
